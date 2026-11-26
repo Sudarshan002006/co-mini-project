@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>4-Bit Adder-Subtractor Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: datasheet bench — controls + readout on the left, live gate-level schematic on the right, verification log below */
+:root{
+  --bg:#EDF0F3; --panel:#F9FAFB; --ink:#16202E; --muted:#5B6676; --line:#CBD2DA;
+  --hi:#D27400; --hi-soft:#F6E2C4; --lo:#9DA8B5; --sel:#24477A; --sel-soft:#DCE5F2;
+  --ok:#1D7F46; --ok-soft:#D9EFE1; --bad:#BE3027; --bad-soft:#F7DDDA;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E141C; --panel:#151D28; --ink:#E3E8EE; --muted:#8E9AAA; --line:#2B3747;
+  --hi:#FFB13B; --hi-soft:#3A2C14; --lo:#475769; --sel:#86AAE3; --sel-soft:#1C2B42;
+  --ok:#4EC27F; --ok-soft:#13301F; --bad:#FF6F62; --bad-soft:#3A1916; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E141C; --panel:#151D28; --ink:#E3E8EE; --muted:#8E9AAA; --line:#2B3747;
+  --hi:#FFB13B; --hi-soft:#3A2C14; --lo:#475769; --sel:#86AAE3; --sel-soft:#1C2B42;
+  --ok:#4EC27F; --ok-soft:#13301F; --bad:#FF6F62; --bad-soft:#3A1916; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(28px,4vw,40px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:22px;font-weight:600}
+h3{font-size:16px;font-weight:600}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+header{display:flex;flex-direction:column;gap:8px;max-width:72ch}
+header .lede{color:var(--muted)}
+.chiprow{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{font-family:var(--f-mono);font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+
+.bench{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.bench{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* mode switch */
+.mode{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.mode button{font:600 14px var(--f-display);padding:10px 8px;border:0;background:transparent;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px}
+.mode button small{font:500 11px var(--f-mono);letter-spacing:.04em}
+.mode button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.mode button:focus-visible,.bit:focus-visible,.step:focus-visible,.btn:focus-visible,.filters button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+
+.reg{display:flex;flex-direction:column;gap:8px}
+.reg-head{display:flex;justify-content:space-between;align-items:baseline}
+.reg-head b{font:600 15px var(--f-display)}
+.reg-head span{font-size:12.5px;color:var(--muted)}
+.reg-row{display:flex;gap:6px;align-items:stretch}
+.bit{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0;padding:6px 0 5px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink);cursor:pointer;font-family:var(--f-mono)}
+.bit .v{font-size:20px;font-weight:600;line-height:1.1}
+.bit .n{font-size:10px;color:var(--muted)}
+.bit[aria-pressed="true"]{background:var(--hi-soft);border-color:var(--hi)}
+.bit[aria-pressed="true"] .v{color:var(--hi)}
+.step{width:34px;border:1px solid var(--line);border-radius:5px;background:transparent;color:var(--ink);font:600 18px var(--f-mono);cursor:pointer}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:500 13px var(--f-body);padding:7px 12px;border:1px solid var(--line);border-radius:5px;background:transparent;color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+
+/* readout */
+.readout{display:flex;flex-direction:column;gap:12px}
+.sum{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:15px;display:grid;grid-template-columns:auto 1fr;column-gap:14px;row-gap:2px;padding:12px 14px;background:var(--bg);border-radius:6px}
+.sum .k{color:var(--muted);font-size:12.5px;align-self:center}
+.sum .v{text-align:right;letter-spacing:.18em}
+.sum .rule{grid-column:1/-1;border-top:1px solid var(--ink);margin:4px 0}
+.sum .res{font-weight:600;font-size:18px}
+.sum .res .c{color:var(--hi)}
+.interp{display:flex;flex-direction:column;gap:8px;font-size:14px}
+.interp div{display:flex;flex-direction:column;gap:1px}
+.interp .t{font:500 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.flags{display:flex;gap:8px;flex-wrap:wrap}
+.flag{font:500 12.5px var(--f-mono);padding:3px 8px;border-radius:4px;border:1px solid var(--line)}
+.flag.on{background:var(--hi-soft);border-color:var(--hi);color:var(--ink)}
+.verdict{font:600 13.5px var(--f-body);padding:8px 10px;border-radius:5px;display:flex;gap:8px;align-items:center}
+.verdict.ok{background:var(--ok-soft);color:var(--ok)}
+.verdict.bad{background:var(--bad-soft);color:var(--bad)}
+
+/* schematic */
+.scope-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.scroll{overflow-x:auto;min-width:0}
+svg.sch{display:block;width:100%;min-width:760px;height:auto}
+.w{fill:none;stroke:var(--lo);stroke-width:2;stroke-linejoin:round;transition:stroke .15s}
+.w.hi{stroke:var(--hi);stroke-width:2.8}
+.j{fill:var(--lo)} .j.hi{fill:var(--hi)}
+.g{fill:var(--panel);stroke:var(--ink);stroke-width:1.6}
+.gx{fill:none;stroke:var(--ink);stroke-width:1.6}
+.fa{fill:var(--panel);stroke:var(--ink);stroke-width:1.6}
+.fa.fault{stroke:var(--bad);stroke-dasharray:5 3}
+.g.fault{stroke:var(--bad)}
+.led{fill:var(--bg);stroke:var(--ink);stroke-width:1.4}
+.led.hi{fill:var(--hi)}
+.lbl{fill:var(--ink);font-family:var(--f-mono);font-size:12px}
+.lbl.s{font-size:10px;fill:var(--muted)}
+.lbl.b{font-family:var(--f-display);font-weight:600;font-size:16px}
+.lbl.v{font-weight:600}
+.pinbox{fill:var(--bg);stroke:var(--ink);stroke-width:1.3}
+.pinbox.hi{fill:var(--hi-soft);stroke:var(--hi)}
+.pin{cursor:pointer}
+.pin:focus-visible .pinbox{stroke:var(--sel);stroke-width:2.5}
+.pin:focus{outline:none}
+
+/* tables */
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:6px 10px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font:500 11.5px var(--f-mono);letter-spacing:.06em;color:var(--muted);text-align:center;background:var(--panel);position:sticky;top:0;z-index:1}
+td.mono,td{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+td.one{color:var(--hi);font-weight:600}
+.trace td:first-child{font-family:var(--f-display);font-weight:600}
+
+.verify-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:end}
+.stats{display:flex;gap:10px;flex-wrap:wrap}
+.stat{padding:10px 14px;border:1px solid var(--line);border-radius:6px;min-width:110px;background:var(--bg)}
+.stat b{display:block;font:600 22px var(--f-mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.stat.pass b{color:var(--ok)} .stat.fail b{color:var(--bad)}
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.filters{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex-wrap:wrap}
+.filters button{font:500 13px var(--f-body);padding:7px 12px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+.filters button:last-child{border-right:0}
+.filters button[aria-pressed="true"]{background:var(--sel-soft);color:var(--sel);font-weight:600}
+select{font:500 13px var(--f-body);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+label.inline{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.tablebox{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:6px}
+.log tbody tr{cursor:pointer}
+.log tbody tr:hover{background:var(--sel-soft)}
+.log tbody tr.cur{background:var(--hi-soft)}
+.pill{display:inline-block;font:600 11px var(--f-mono);padding:2px 7px;border-radius:3px;letter-spacing:.04em}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.ov{background:var(--hi-soft);color:var(--ink)}
+.muted{color:var(--muted)}
+.note{font-size:13px;color:var(--muted)}
+
+/* theory */
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media (max-width:900px){.two{grid-template-columns:minmax(0,1fr)}}
+.prose{display:flex;flex-direction:column;gap:12px;max-width:68ch}
+.eq{font-family:var(--f-mono);background:var(--bg);padding:10px 12px;border-radius:6px;font-size:13.5px;line-height:1.7;overflow-x:auto}
+ul.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.code-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px}
+pre.code{margin:0;font:13px/1.6 var(--f-mono);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:14px;overflow:auto;max-height:520px;tab-size:2}
+.k1{color:var(--sel);font-weight:600} .cm{color:var(--muted);font-style:italic}
+@media (prefers-reduced-motion:reduce){.w{transition:none}}
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Digital logic mini-project · combinational circuits</span>
+  <h1>4-Bit Binary Adder-Subtractor</h1>
+  <p class="lede">One circuit, two operations. A mode input <b>M</b> drives four XOR gates that pass or invert B, and the same M feeds the first carry-in. M = 0 gives A + B; M = 1 gives A + B′ + 1, which is A − B in two's complement. Toggle any bit and every wire below updates from a gate-level simulation.</p>
+  <div class="chiprow"><span class="chip">4 × XOR</span><span class="chip">4 × full adder (ripple carry)</span><span class="chip">overflow V = C3 ⊕ C4</span><span class="chip">512 test vectors</span></div>
+</header>
+
+<section class="bench">
+  <div class="panel" aria-label="Inputs and result">
+    <div class="mode" role="group" aria-label="Mode control M">
+      <button id="mode-add" aria-pressed="true">Add<small>M = 0</small></button>
+      <button id="mode-sub" aria-pressed="false">Subtract<small>M = 1</small></button>
+    </div>
+    <div class="reg" id="reg-A"></div>
+    <div class="reg" id="reg-B"></div>
+    <div class="btnrow">
+      <button class="btn" id="btn-rand">Random inputs</button>
+      <button class="btn" id="btn-swap">Swap A ↔ B</button>
+      <button class="btn" id="btn-clear">Clear</button>
+    </div>
+    <div class="readout">
+      <span class="eyebrow">Column addition inside the circuit</span>
+      <div class="sum" id="sum"></div>
+      <div class="flags" id="flags"></div>
+      <div class="interp" id="interp"></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="scope-head">
+      <div><span class="eyebrow">Live schematic</span><h2>Gate-level circuit</h2></div>
+      <div class="legend"><span><i style="background:var(--hi)"></i>logic 1</span><span><i style="background:var(--lo)"></i>logic 0</span></div>
+    </div>
+    <div class="scroll"><svg class="sch" id="sch" viewBox="0 0 920 410" role="img" aria-label="4-bit adder-subtractor schematic with XOR gates and full adders"></svg></div>
+    <p class="note">Click the A, B and M input boxes on the schematic to toggle them. Bit 0 (LSB) is on the right, so carries ripple right to left.</p>
+    <div>
+      <h3 style="margin-bottom:8px">Signal trace, stage by stage</h3>
+      <div class="scroll"><table class="trace"><thead><tr><th>Stage</th><th>A<sub>i</sub></th><th>B<sub>i</sub></th><th>M</th><th>B<sub>i</sub> ⊕ M</th><th>C<sub>in</sub></th><th>S<sub>i</sub></th><th>C<sub>out</sub></th></tr></thead><tbody id="trace"></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="vh">
+  <div class="verify-head">
+    <div class="prose" style="gap:6px">
+      <span class="eyebrow">Verification</span>
+      <h2 id="vh">Exhaustive test: every A, B and M combination</h2>
+      <p class="muted">16 values of A × 16 values of B × 2 modes = 512 vectors. Each one runs through the gate-level circuit and is compared with a separate arithmetic reference model on S, Cout and V. Click any row to load it into the circuit.</p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="controls">
+    <div class="filters" role="group" aria-label="Filter test results" id="filters">
+      <button data-f="all" aria-pressed="true">All</button>
+      <button data-f="add" aria-pressed="false">Add</button>
+      <button data-f="sub" aria-pressed="false">Subtract</button>
+      <button data-f="ov" aria-pressed="false">Overflow cases</button>
+      <button data-f="fail" aria-pressed="false">Failures</button>
+    </div>
+    <label class="inline" for="fault">Fault injection
+      <select id="fault">
+        <option value="none">None (correct circuit)</option>
+        <option value="x2">XOR gate 2 output stuck at 0</option>
+        <option value="c2">Carry C2 stuck at 1</option>
+        <option value="fa1">FA1 sum output inverted</option>
+        <option value="cin">Cin tied to 0 instead of M</option>
+      </select>
+    </label>
+  </div>
+  <p class="note" id="faultnote">Pick a fault to see the test bench catch a broken circuit. The schematic and the readout use the same faulty circuit.</p>
+  <div class="tablebox"><table class="log"><thead><tr><th>#</th><th>M</th><th>A</th><th>B</th><th>B ⊕ M</th><th>Expected S</th><th>Circuit S</th><th>Cout</th><th>V</th><th>Unsigned</th><th>Signed</th><th>Status</th></tr></thead><tbody id="log"></tbody></table></div>
+</section>
+
+<section class="two">
+  <div class="panel prose">
+    <span class="eyebrow">Theory</span>
+    <h2>How one circuit does both</h2>
+    <p>An XOR gate with one input tied to a control line acts as a controlled inverter: B ⊕ 0 = B and B ⊕ 1 = B′. Subtraction in two's complement is A − B = A + B′ + 1. The XOR gates supply B′ and the carry-in C0 = M supplies the +1, so no extra hardware is needed.</p>
+    <div class="eq">Xᵢ = Bᵢ ⊕ M<br>Sᵢ = Aᵢ ⊕ Xᵢ ⊕ Cᵢ<br>Cᵢ₊₁ = Aᵢ·Xᵢ + Cᵢ·(Aᵢ ⊕ Xᵢ)<br>C₀ = M &nbsp;&nbsp; V = C₃ ⊕ C₄</div>
+    <ul class="steps">
+      <li><b>M = 0:</b> X = B, C0 = 0, so S = A + B. Cout = 1 means the unsigned sum exceeded 15.</li>
+      <li><b>M = 1:</b> X = B′, C0 = 1, so S = A + B′ + 1 = A − B. Cout = 1 means A ≥ B (no borrow); Cout = 0 means a borrow occurred.</li>
+      <li><b>Overflow V:</b> for signed numbers (−8 to +7), V = 1 when the carry into the sign bit differs from the carry out of it, meaning the true answer doesn't fit in 4 bits.</li>
+    </ul>
+    <h3>Worked example: 6 − 3</h3>
+    <div class="eq">A = 0110, B = 0011, M = 1<br>B ⊕ 1111 = 1100, C0 = 1<br>0110 + 1100 + 1 = 1 0011 → S = 0011 (3), Cout = 1, V = 0</div>
+  </div>
+  <div class="panel">
+    <span class="eyebrow">Building block</span>
+    <h2>Full adder truth table</h2>
+    <div class="scroll"><table><thead><tr><th>A</th><th>B</th><th>C<sub>in</sub></th><th>Sum</th><th>C<sub>out</sub></th></tr></thead><tbody id="fatt"></tbody></table></div>
+    <h3>Components for a hardware build</h3>
+    <ul class="steps">
+      <li>2 × 74LS86 (quad 2-input XOR): 4 gates for Bᵢ ⊕ M, 1 for overflow V</li>
+      <li>1 × 74LS83 / 74LS283 (4-bit full adder with fast carry), or 4 discrete full adders built from 74LS86 + 74LS08 + 74LS32</li>
+      <li>9 SPDT switches (A3–A0, B3–B0, M) with pull-down resistors</li>
+      <li>6 LEDs with 330 Ω resistors (S3–S0, Cout, V), 5 V supply, breadboard</li>
+    </ul>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="code-head">
+    <div><span class="eyebrow">HDL implementation</span><h2>Verilog source and self-checking testbench</h2></div>
+    <div class="tabs">
+      <div class="filters" role="group" aria-label="Choose file" id="codetabs">
+        <button data-c="rtl" aria-pressed="true">add_sub_4bit.v</button>
+        <button data-c="tb" aria-pressed="false">tb_add_sub.v</button>
+      </div>
+      <button class="btn primary" id="copy">Copy</button>
+    </div>
+  </div>
+  <pre class="code" id="code"></pre>
+  <p class="note">Run with Icarus Verilog: <span class="mono">iverilog -o sim add_sub_4bit.v tb_add_sub.v &amp;&amp; vvp sim</span>. The testbench applies the same 512 vectors as the table above and prints PASS when all of them match.</p>
+</section>
+</div>
+
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const state={A:6,B:3,M:1,fault:'none'};
+
+/* ---------- gate-level circuit model ---------- */
+const XOR=(a,b)=>a^b, AND=(a,b)=>a&b, OR=(a,b)=>a|b;
+function fullAdder(a,b,c){ const p=XOR(a,b); return {s:XOR(p,c), co:OR(AND(a,b),AND(c,p))}; }
+function circuit(A,B,M,fault){
+  const a=[],b=[],x=[],s=[],c=[];
+  c[0]= fault==='cin' ? 0 : M;
+  for(let i=0;i<4;i++){
+    a[i]=(A>>i)&1; b[i]=(B>>i)&1;
+    x[i]=XOR(b[i],M);
+    if(fault==='x2'&&i===2) x[i]=0;
+    const fa=fullAdder(a[i],x[i],c[i]);
+    s[i]=fa.s; if(fault==='fa1'&&i===1) s[i]^=1;
+    c[i+1]=fa.co; if(fault==='c2'&&i===1) c[i+1]=1;
+  }
+  const S=s[0]|s[1]<<1|s[2]<<2|s[3]<<3;
+  return {a,b,x,s,c,S,X:x[0]|x[1]<<1|x[2]<<2|x[3]<<3,cout:c[4],V:XOR(c[3],c[4])};
+}
+/* ---------- independent arithmetic reference ---------- */
+const signed=n=>n>7?n-16:n;
+function reference(A,B,M){
+  const sa=signed(A), sb=signed(B);
+  if(M===0){ const r=A+B, sr=sa+sb; return {S:r&15,cout:r>>4,V:(sr>7||sr<-8)?1:0,u:r,sr}; }
+  const sr=sa-sb; return {S:((A-B)%16+16)%16,cout:A>=B?1:0,V:(sr>7||sr<-8)?1:0,u:A-B,sr};
+}
+const bin=(n,w=4)=>n.toString(2).padStart(w,'0');
+const sgn=n=>(n>0?'+':n<0?'−':'')+Math.abs(n);
+
+/* ---------- schematic ---------- */
+const svg=document.getElementById('sch');
+function el(tag,attrs,parent=svg){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent.appendChild(e);return e;}
+function wire(pts,sig){return el('polyline',{points:pts.map(p=>p.join(',')).join(' '),class:'w','data-sig':sig});}
+function dot(x,y,sig){el('circle',{cx:x,cy:y,r:3.6,class:'j','data-sig':sig});}
+function text(x,y,t,cls='lbl',anchor='middle'){const e=el('text',{x,y,class:cls,'text-anchor':anchor});e.textContent=t;return e;}
+function xorGate(gx,gy,id){
+  el('path',{d:`M${gx-18},${gy-17} Q${gx},${gy-7} ${gx+18},${gy-17} Q${gx+18},${gy+5} ${gx},${gy+17} Q${gx-18},${gy+5} ${gx-18},${gy-17} Z`,class:'g',id});
+  el('path',{d:`M${gx-18},${gy-23} Q${gx},${gy-13} ${gx+18},${gy-23}`,class:'gx'});
+}
+const cx=i=>760-200*i;
+const valueTexts=[];
+// wires first
+for(let i=0;i<4;i++){
+  const x=cx(i);
+  wire([[x-40,42],[x-40,200]],'A'+i);
+  wire([[x+12,42],[x+12,140]],'B'+i);
+  wire([[x+28,90],[x+28,140]],'M');
+  wire([[x+20,167],[x+20,200]],'X'+i);
+  wire([[x-5,290],[x-5,355]],'S'+i);
+  if(i<3) wire([[x-60,245],[x-150,245]],'C'+(i+1));
+}
+wire([[880,42],[880,245],[810,245]],'M');
+wire([[880,90],[cx(3)+28,90]],'M');
+wire([[100,245],[14,245]],'C4');
+wire([[52,245],[52,309]],'C4');
+wire([[255,245],[255,296],[68,296],[68,309]],'C3');
+wire([[60,337],[60,355]],'V');
+for(let i=0;i<4;i++) dot(cx(i)+28,90,'M');
+dot(880,90,'M'); dot(52,245,'C4'); dot(255,245,'C3');
+// components
+for(let i=0;i<4;i++){
+  const x=cx(i);
+  xorGate(x+20,150,'xor'+i);
+  text(x+30,190,'B'+i+'⊕M','lbl s','start');
+  el('rect',{x:x-60,y:200,width:110,height:90,rx:6,class:'fa',id:'fa'+i});
+  text(x-40,215,'A','lbl s'); text(x+20,215,'B','lbl s');
+  text(x-5,240,'FA'+i,'lbl b');
+  text(x-54,263,'Cout','lbl s','start'); text(x+44,263,'Cin','lbl s','end');
+  text(x-5,284,'S','lbl s');
+  el('circle',{cx:x-5,cy:369,r:12,class:'led','data-sig':'S'+i});
+  text(x-5,400,'S'+i,'lbl v');
+  if(i<3) valueTexts.push([text(x-105,238,'','lbl s'),'C'+(i+1)]);
+}
+valueTexts.push([text(36,238,'','lbl s'),'C4']);
+text(14,262,'Cout','lbl v','start');
+xorGate(60,320,'xorV');
+el('circle',{cx:60,cy:369,r:12,class:'led','data-sig':'V'});
+text(60,400,'V','lbl v');
+el('circle',{cx:14,cy:245,r:4,class:'j','data-sig':'C4'});
+text(838,238,'C0 = M','lbl s','start');
+text(870,84,'M bus','lbl s','end');
+// clickable input pins
+function pin(x,label,sig,onToggle){
+  const g=el('g',{class:'pin',tabindex:0,role:'button','aria-label':'Toggle '+label});
+  const t=el('text',{x,y:16,class:'lbl v','text-anchor':'middle'},g); t.textContent=label;
+  el('rect',{x:x-12,y:24,width:24,height:18,rx:3,class:'pinbox','data-sig':sig},g);
+  const v=el('text',{x,y:37.5,class:'lbl','text-anchor':'middle'},g);
+  valueTexts.push([v,sig,true]);
+  g.addEventListener('click',onToggle);
+  g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onToggle();}});
+}
+for(let i=0;i<4;i++){
+  pin(cx(i)-40,'A'+i,'A'+i,()=>{state.A^=1<<i;render();});
+  pin(cx(i)+12,'B'+i,'B'+i,()=>{state.B^=1<<i;render();});
+}
+pin(880,'M','M',()=>{state.M^=1;render();});
+
+/* ---------- controls ---------- */
+function buildReg(name){
+  const box=document.getElementById('reg-'+name);
+  box.innerHTML=`<div class="reg-head"><b>Input ${name}</b><span id="${name}-dec"></span></div>
+  <div class="reg-row"><button class="step" id="${name}-dn" aria-label="Decrease ${name}">−</button>
+  ${[3,2,1,0].map(i=>`<button class="bit" id="${name}-b${i}" aria-pressed="false" aria-label="${name}${i}"><span class="v">0</span><span class="n">${name}${i}</span></button>`).join('')}
+  <button class="step" id="${name}-up" aria-label="Increase ${name}">+</button></div>`;
+  for(let i=0;i<4;i++) document.getElementById(`${name}-b${i}`).onclick=()=>{state[name]^=1<<i;render();};
+  document.getElementById(name+'-dn').onclick=()=>{state[name]=(state[name]+15)%16;render();};
+  document.getElementById(name+'-up').onclick=()=>{state[name]=(state[name]+1)%16;render();};
+}
+buildReg('A'); buildReg('B');
+document.getElementById('mode-add').onclick=()=>{state.M=0;render();};
+document.getElementById('mode-sub').onclick=()=>{state.M=1;render();};
+document.getElementById('btn-rand').onclick=()=>{state.A=Math.floor(Math.random()*16);state.B=Math.floor(Math.random()*16);render();};
+document.getElementById('btn-swap').onclick=()=>{[state.A,state.B]=[state.B,state.A];render();};
+document.getElementById('btn-clear').onclick=()=>{state.A=0;state.B=0;render();};
+
+/* ---------- render ---------- */
+function render(){
+  const {A,B,M,fault}=state;
+  const r=circuit(A,B,M,fault), ref=reference(A,B,M);
+  const sig={M};
+  for(let i=0;i<4;i++){sig['A'+i]=r.a[i];sig['B'+i]=r.b[i];sig['X'+i]=r.x[i];sig['S'+i]=r.s[i];}
+  for(let i=1;i<=4;i++) sig['C'+i]=r.c[i];
+  sig.V=r.V;
+  if(fault==='cin'){ /* C0 wire is shown as part of M bus; note in readout */ }
+  svg.querySelectorAll('[data-sig]').forEach(e=>e.classList.toggle('hi',!!sig[e.dataset.sig]));
+  valueTexts.forEach(([t,s,isPin])=>{t.textContent=isPin?String(sig[s]):`${s}=${sig[s]}`;});
+  ['xor0','xor1','xor2','xor3'].forEach((id,i)=>document.getElementById(id).classList.toggle('fault',fault==='x2'&&i===2));
+  [0,1,2,3].forEach(i=>document.getElementById('fa'+i).classList.toggle('fault',(fault==='fa1'&&i===1)||(fault==='c2'&&i===1)||(fault==='cin'&&i===0)));
+
+  // controls
+  for(const n of ['A','B']){
+    const v=state[n];
+    for(let i=0;i<4;i++){const b=document.getElementById(`${n}-b${i}`);const on=(v>>i)&1;b.setAttribute('aria-pressed',on?'true':'false');b.querySelector('.v').textContent=on;}
+    document.getElementById(n+'-dec').textContent=`${v} unsigned · ${sgn(signed(v))} signed`;
+  }
+  document.getElementById('mode-add').setAttribute('aria-pressed',M===0?'true':'false');
+  document.getElementById('mode-sub').setAttribute('aria-pressed',M===1?'true':'false');
+
+  // column sum
+  const cin=r.c[0];
+  document.getElementById('sum').innerHTML=
+    `<span class="k">A</span><span class="v">${bin(A)}</span>`+
+    `<span class="k">${M?'B ⊕ 1 = B′':'B ⊕ 0 = B'}</span><span class="v">${bin(r.X)}</span>`+
+    `<span class="k">+ C0 (= M)</span><span class="v">${cin}</span>`+
+    `<span class="rule"></span>`+
+    `<span class="k">Cout · S</span><span class="v res"><span class="c">${r.cout}</span> ${bin(r.S)}</span>`;
+  document.getElementById('flags').innerHTML=
+    `<span class="flag ${r.cout?'on':''}">Cout = ${r.cout}</span><span class="flag ${r.V?'on':''}">V = ${r.V}</span><span class="flag">S = ${r.S}</span>`;
+
+  let uns, sg;
+  if(M===0){
+    uns = `${A} + ${B} = ${A+B}` + (r.cout? ` → exceeds 15, so S = ${r.S} with carry out` : ` → S = ${r.S}, no carry`);
+  } else {
+    uns = `${A} − ${B} = ${A-B}` + (r.cout? ` → Cout = 1, A ≥ B, no borrow` : ` → Cout = 0, borrow (S = ${r.S} wraps mod 16)`);
+  }
+  const sa=signed(A), sb=signed(B), sS=signed(r.S);
+  sg = `${sgn(sa)} ${M?'−':'+'} ${sgn(sb).replace(/^([+−])/,'($1')}${sb!==0?')':''} = ${sgn(ref.sr)}` +
+       (r.V ? ` → doesn't fit in −8…+7, overflow (S reads ${sgn(sS)})` : ` → S = ${sgn(sS)}, valid`);
+  document.getElementById('interp').innerHTML=
+    `<div><span class="t">Unsigned (0 to 15)</span><span>${uns}</span></div><div><span class="t">Signed two's complement (−8 to +7)</span><span>${sg}</span></div>`;
+  const ok = r.S===ref.S && r.cout===ref.cout && r.V===ref.V;
+  const v=document.getElementById('verdict');
+  v.className='verdict '+(ok?'ok':'bad');
+  v.textContent= ok ? '✓ Circuit output matches the arithmetic reference' : `✗ Mismatch: expected S = ${bin(ref.S)}, Cout = ${ref.cout}, V = ${ref.V}`;
+
+  // trace
+  let tr='';
+  for(let i=3;i>=0;i--){
+    const cells=[r.a[i],r.b[i],M,r.x[i],r.c[i],r.s[i],r.c[i+1]];
+    tr+=`<tr><td>FA${i}</td>${cells.map(c=>`<td class="${c?'one':''}">${c}</td>`).join('')}</tr>`;
+  }
+  document.getElementById('trace').innerHTML=tr;
+  markCurrent();
+}
+
+/* ---------- verification ---------- */
+let results=[], filter='all';
+function runTests(){
+  results=[]; let n=0;
+  for(let M=0;M<2;M++) for(let A=0;A<16;A++) for(let B=0;B<16;B++){
+    const r=circuit(A,B,M,state.fault), e=reference(A,B,M);
+    results.push({n:++n,A,B,M,r,e,ok:r.S===e.S&&r.cout===e.cout&&r.V===e.V});
+  }
+  const pass=results.filter(t=>t.ok).length, fail=results.length-pass;
+  const ov=results.filter(t=>t.e.V).length;
+  document.getElementById('stats').innerHTML=
+    `<div class="stat pass"><b>${pass}</b><span>passed</span></div>`+
+    `<div class="stat ${fail?'fail':''}"><b>${fail}</b><span>failed</span></div>`+
+    `<div class="stat"><b>${ov}</b><span>overflow cases</span></div>`+
+    `<div class="stat"><b>${results.length}</b><span>vectors run</span></div>`;
+  drawLog();
+}
+function drawLog(){
+  const rows=results.filter(t=> filter==='all'||(filter==='add'&&t.M===0)||(filter==='sub'&&t.M===1)||(filter==='ov'&&t.e.V)||(filter==='fail'&&!t.ok));
+  const tb=document.getElementById('log');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="12" class="muted" style="padding:18px">${filter==='fail'?'No failures. Every vector matches the reference model.':'No rows.'}</td></tr>`;return;}
+  tb.innerHTML=rows.map(t=>{
+    const {A,B,M,r,e}=t;
+    const op=M?'−':'+';
+    return `<tr data-a="${A}" data-b="${B}" data-m="${M}">
+      <td class="muted">${t.n}</td><td>${M}</td><td>${bin(A)} <span class="muted">(${A})</span></td><td>${bin(B)} <span class="muted">(${B})</span></td>
+      <td>${bin(r.X)}</td><td>${bin(e.S)}</td><td class="${r.S!==e.S?'':''}">${bin(r.S)}</td>
+      <td>${r.cout}</td><td>${r.V?'<span class="pill ov">1</span>':'0'}</td>
+      <td>${A} ${op} ${B} = ${e.u}</td><td>${sgn(signed(A))} ${op} ${sgn(signed(B))} = ${sgn(e.sr)}</td>
+      <td>${t.ok?'<span class="pill ok">PASS</span>':'<span class="pill bad">FAIL</span>'}</td></tr>`;
+  }).join('');
+  markCurrent();
+}
+function markCurrent(){
+  document.querySelectorAll('#log tr.cur').forEach(r=>r.classList.remove('cur'));
+  const row=document.querySelector(`#log tr[data-a="${state.A}"][data-b="${state.B}"][data-m="${state.M}"]`);
+  if(row) row.classList.add('cur');
+}
+document.getElementById('log').addEventListener('click',e=>{
+  const tr=e.target.closest('tr[data-a]'); if(!tr) return;
+  state.A=+tr.dataset.a; state.B=+tr.dataset.b; state.M=+tr.dataset.m; render();
+  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelector('.bench').scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'});
+});
+document.getElementById('filters').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; filter=b.dataset.f;
+  document.querySelectorAll('#filters button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));
+  drawLog();
+});
+const faultNotes={none:'Pick a fault to see the test bench catch a broken circuit. The schematic and the readout use the same faulty circuit.',
+  x2:'XOR gate 2 always outputs 0, so B2 is never passed or inverted. Failing vectors are the ones where B2 ⊕ M should be 1.',
+  c2:'The carry from FA1 into FA2 is stuck at 1. Every vector without a genuine carry there now fails.',
+  fa1:'FA1 produces the complement of its sum. Every single vector fails on bit S1.',
+  cin:'C0 is tied to 0, so subtraction computes A + B′ (one\'s complement) and is off by one. Addition still passes.'};
+document.getElementById('fault').addEventListener('change',e=>{
+  state.fault=e.target.value; document.getElementById('faultnote').textContent=faultNotes[state.fault];
+  runTests(); render();
+});
+
+/* ---------- static tables & code ---------- */
+let fatt='';
+for(let a=0;a<2;a++)for(let b=0;b<2;b++)for(let c=0;c<2;c++){const f=fullAdder(a,b,c);fatt+=`<tr>${[a,b,c,f.s,f.co].map(v=>`<td class="${v?'one':''}">${v}</td>`).join('')}</tr>`;}
+document.getElementById('fatt').innerHTML=fatt;
+
+const code={
+rtl:`// 4-bit adder-subtractor using XOR gates and full adders
+// M = 0 : S = A + B
+// M = 1 : S = A - B  (A + ~B + 1, two's complement)
+
+module full_adder (
+  input  a, b, cin,
+  output sum, cout
+);
+  assign sum  = a ^ b ^ cin;
+  assign cout = (a & b) | (cin & (a ^ b));
+endmodule
+
+module add_sub_4bit (
+  input  [3:0] A,
+  input  [3:0] B,
+  input        M,      // mode control: 0 = add, 1 = subtract
+  output [3:0] S,
+  output       Cout,   // carry out (add) / NOT borrow (subtract)
+  output       V       // signed overflow
+);
+  wire [3:0] Bx;       // B after the XOR gates
+  wire [4:0] C;        // ripple carry chain
+
+  assign Bx   = B ^ {4{M}};   // four XOR gates: Bx[i] = B[i] ^ M
+  assign C[0] = M;            // +1 for two's complement when subtracting
+
+  full_adder FA0 (.a(A[0]), .b(Bx[0]), .cin(C[0]), .sum(S[0]), .cout(C[1]));
+  full_adder FA1 (.a(A[1]), .b(Bx[1]), .cin(C[1]), .sum(S[1]), .cout(C[2]));
+  full_adder FA2 (.a(A[2]), .b(Bx[2]), .cin(C[2]), .sum(S[2]), .cout(C[3]));
+  full_adder FA3 (.a(A[3]), .b(Bx[3]), .cin(C[3]), .sum(S[3]), .cout(C[4]));
+
+  assign Cout = C[4];
+  assign V    = C[3] ^ C[4];
+endmodule
+`,
+tb:`\`timescale 1ns/1ps
+// Exhaustive self-checking testbench: 16 x 16 x 2 = 512 vectors
+
+module tb_add_sub;
+  reg  [3:0] A, B;
+  reg        M;
+  wire [3:0] S;
+  wire       Cout, V;
+
+  integer a, b, m;
+  integer sa, sb, sr;
+  integer errors;
+  reg [4:0] exp_u;
+  reg [3:0] exp_s;
+  reg       exp_c, exp_v;
+
+  add_sub_4bit dut (.A(A), .B(B), .M(M), .S(S), .Cout(Cout), .V(V));
+
+  initial begin
+    errors = 0;
+    $display(" M    A     B  |   S   Cout V");
+    for (m = 0; m < 2; m = m + 1)
+      for (a = 0; a < 16; a = a + 1)
+        for (b = 0; b < 16; b = b + 1) begin
+          A = a; B = b; M = m;
+          #5;
+
+          sa = (a > 7) ? a - 16 : a;      // signed value of A
+          sb = (b > 7) ? b - 16 : b;      // signed value of B
+
+          if (m == 0) begin
+            exp_u = a + b;
+            exp_c = exp_u[4];
+            sr    = sa + sb;
+          end else begin
+            exp_u = a - b;
+            exp_c = (a >= b);             // 1 = no borrow
+            sr    = sa - sb;
+          end
+          exp_s = exp_u[3:0];
+          exp_v = (sr > 7) || (sr < -8);
+
+          $display(" %0d  %b  %b  |  %b   %b    %b", M, A, B, S, Cout, V);
+
+          if (S !== exp_s || Cout !== exp_c || V !== exp_v) begin
+            errors = errors + 1;
+            $display("   FAIL: expected S=%b Cout=%b V=%b", exp_s, exp_c, exp_v);
+          end
+        end
+
+    if (errors == 0) $display("PASS: all 512 combinations verified");
+    else             $display("FAILED: %0d mismatches", errors);
+    $finish;
+  end
+endmodule
+`};
+let curCode='rtl';
+function hl(src){
+  const esc=src.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return esc.split('\n').map(line=>{
+    const i=line.indexOf('//'); let pre=i>=0?line.slice(0,i):line, cm=i>=0?line.slice(i):'';
+    pre=pre.replace(/\b(module|endmodule|input|output|wire|reg|assign|integer|initial|begin|end|for|if|else)\b/g,'<span class="k1">$1</span>');
+    return pre+(cm?`<span class="cm">${cm}</span>`:'');
+  }).join('\n');
+}
+function showCode(){document.getElementById('code').innerHTML=hl(code[curCode]);}
+document.getElementById('codetabs').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; curCode=b.dataset.c;
+  document.querySelectorAll('#codetabs button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));
+  showCode();
+});
+document.getElementById('copy').addEventListener('click',async e=>{
+  const btn=e.currentTarget;
+  try{ await navigator.clipboard.writeText(code[curCode]); btn.textContent='Copied'; }
+  catch(_){ const r=document.createRange(); r.selectNodeContents(document.getElementById('code')); const s=getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent='Selected, press Ctrl+C'; }
+  setTimeout(()=>btn.textContent='Copy',1800);
+});
+
+showCode(); runTests(); render();
+})();
+</script>
+
+</body>
+</html>
